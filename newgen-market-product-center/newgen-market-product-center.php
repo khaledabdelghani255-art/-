@@ -2,7 +2,7 @@
 /**
  * Plugin Name: NEWGEN MARKET Product Center
  * Description: Arabic RTL front-end product submission and seller product dashboard for NEWGEN MARKET (WooCommerce required).
- * Version: 1.0.0
+ * Version: 1.1.0
  * Requires at least: 6.2
  * Requires PHP: 7.4
  * Author: NEWGEN World
@@ -11,7 +11,7 @@
 if (!defined('ABSPATH')) exit;
 
 final class NEWGEN_Market_Product_Center {
-    const VERSION = '1.0.0';
+    const VERSION = '1.1.0';
     const NONCE = 'ngm_submit_product';
 
     public function __construct() {
