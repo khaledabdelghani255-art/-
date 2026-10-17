@@ -126,6 +126,34 @@ final class NEWGEN_Market_Product_Center {
         exit;
     }
 
+    private function edit_form($id) {
+        $id = absint($id);
+        $post = get_post($id);
+        $admin = current_user_can('manage_woocommerce') || current_user_can('edit_others_products');
+        if (!$post || $post->post_type !== 'product' || (!$admin && (int)$post->post_author !== get_current_user_id())) return $this->notice('لا تملك صلاحية تعديل هذا المنتج.', 'error');
+        $p = wc_get_product($id);
+        if (!$p) return $this->notice('المنتج غير موجود.', 'error');
+        ob_start(); ?>
+        <div class="ngm-edit-panel">
+          <h3>تعديل المنتج: <?php echo esc_html($post->post_title); ?></h3>
+          <p class="ngm-footnote">بعد الحفظ سيعود المنتج إلى المراجعة ولن يظهر للعامة حتى تعتمد الإدارة التغييرات.</p>
+          <form class="ngm-form" action="<?php echo esc_url(admin_url('admin-post.php')); ?>" method="post" enctype="multipart/form-data">
+            <input type="hidden" name="action" value="ngm_update_product">
+            <input type="hidden" name="ngm_product_id" value="<?php echo esc_attr($id); ?>">
+            <?php wp_nonce_field('ngm_update_product_' . $id, '_ngm_nonce'); ?>
+            <div class="ngm-field"><label for="ngm-edit-name">اسم المنتج *</label><input id="ngm-edit-name" name="ngm_name" required maxlength="180" value="<?php echo esc_attr($p->get_name()); ?>"></div>
+            <div class="ngm-field"><label for="ngm-edit-category">الفئة *</label><select id="ngm-edit-category" name="ngm_category" required><?php foreach (get_terms(['taxonomy'=>'product_cat','hide_empty'=>false]) as $cat) if (!is_wp_error($cat)) echo '<option value="'.esc_attr($cat->term_id).'" '.selected(in_array((int)$cat->term_id, $p->get_category_ids(), true), true, false).'>'.esc_html($cat->name).'</option>'; ?></select></div>
+            <div class="ngm-field"><label for="ngm-edit-sku">كود المنتج SKU</label><input id="ngm-edit-sku" name="ngm_sku" maxlength="80" value="<?php echo esc_attr($p->get_sku()); ?>"></div>
+            <div class="ngm-field"><label for="ngm-edit-price">السعر بالجنيه المصري *</label><input id="ngm-edit-price" name="ngm_price" type="number" min="0.01" step="0.01" required value="<?php echo esc_attr($p->get_regular_price()); ?>"></div>
+            <div class="ngm-field"><label for="ngm-edit-stock">الكمية</label><input id="ngm-edit-stock" name="ngm_stock" type="number" min="0" step="1" value="<?php echo esc_attr($p->managing_stock() ? $p->get_stock_quantity() : ''); ?>"></div>
+            <div class="ngm-field ngm-full"><label for="ngm-edit-image">استبدال الصورة (اختياري)</label><input id="ngm-edit-image" name="ngm_image" type="file" accept="image/jpeg,image/png,image/webp"><small>JPEG أو PNG أو WebP، حتى 2 ميجابايت، وأبعاد من 500×500 إلى 2000×2000.</small></div>
+            <div class="ngm-field ngm-full"><label for="ngm-edit-description">وصف المنتج *</label><textarea id="ngm-edit-description" name="ngm_description" rows="5" required maxlength="5000"><?php echo esc_textarea($p->get_description()); ?></textarea></div>
+            <div class="ngm-field ngm-full"><button class="ngm-button" type="submit">حفظ وإرسال للمراجعة</button></div>
+          </form>
+        </div>
+        <?php return ob_get_clean();
+    }
+
     public function my_products() {
         if (!$this->ready()) return $this->notice('يلزم تفعيل WooCommerce.', 'error');
         if (!is_user_logged_in()) return $this->notice('سجّل الدخول لعرض منتجاتك.', 'error');
@@ -135,8 +163,11 @@ final class NEWGEN_Market_Product_Center {
         $products = get_posts($args);
         ob_start(); ?>
         <section class="ngm-wrap" dir="rtl"><header class="ngm-head"><div><span class="ngm-kicker">SELLER CENTER</span><h2>إدارة منتجاتي</h2><p>تابع المنتجات المنشورة وتلك التي تنتظر مراجعة الإدارة.</p></div><a class="ngm-button" href="<?php echo esc_url($this->page_url('newgen_market_add_product')); ?>">إضافة منتج</a></header>
-        <?php if (!$products): ?><p class="ngm-notice">لا توجد منتجات في حسابك حتى الآن.</p><?php else: ?><div class="ngm-table-wrap"><table class="ngm-table"><thead><tr><th>المنتج</th><th>السعر</th><th>المخزون</th><th>الحالة</th></tr></thead><tbody>
-        <?php foreach ($products as $p): $product=wc_get_product($p->ID); if (!$product) continue; ?><tr><td><?php echo esc_html($p->post_title); ?></td><td><?php echo wp_kses_post($product->get_price_html()); ?></td><td><?php echo esc_html($product->get_stock_status()==='instock' ? ($product->managing_stock() ? $product->get_stock_quantity() : 'غير محدد') : 'غير متوفر'); ?></td><td><?php echo esc_html($this->status($p->post_status)); ?></td></tr><?php endforeach; ?>
+        <?php if (isset($_GET['ngm_edit'])) echo $this->edit_form(absint($_GET['ngm_edit'])); ?>
+        <?php if (isset($_GET['ngm_updated']) && sanitize_key(wp_unslash($_GET['ngm_updated'])) === 'yes') echo $this->notice('تم حفظ التعديلات وإرسال المنتج للمراجعة.', 'success'); ?>
+        <?php if (isset($_GET['ngm_error'])) echo $this->notice('تعذر حفظ التعديلات. راجع الحقول والصورة ورمز المنتج.', 'error'); ?>
+        <?php if (!$products): ?><p class="ngm-notice">لا توجد منتجات في حسابك حتى الآن.</p><?php else: ?><div class="ngm-table-wrap"><table class="ngm-table"><thead><tr><th>المنتج</th><th>السعر</th><th>المخزون</th><th>الحالة</th><th>الإجراء</th></tr></thead><tbody>
+        <?php foreach ($products as $p): $product=wc_get_product($p->ID); if (!$product) continue; ?><tr><td><?php echo esc_html($p->post_title); ?></td><td><?php echo wp_kses_post($product->get_price_html()); ?></td><td><?php echo esc_html($product->get_stock_status()==='instock' ? ($product->managing_stock() ? $product->get_stock_quantity() : 'غير محدد') : 'غير متوفر'); ?></td><td><?php echo esc_html($this->status($p->post_status)); ?></td><td><a class="ngm-edit-link" href="<?php echo esc_url(add_query_arg('ngm_edit', $p->ID, get_permalink())); ?>">تعديل</a></td></tr><?php endforeach; ?>
         </tbody></table></div><?php endif; ?></section>
         <?php return ob_get_clean();
     }
@@ -151,7 +182,64 @@ final class NEWGEN_Market_Product_Center {
         return isset($map[$status]) ? $map[$status] : 'قيد المراجعة';
     }
     public function update_product() {
-        wp_die('تعديل بيانات المنتج من لوحة البائع غير مفعّل في هذه النسخة. استخدم تحرير المنتج بصلاحية معتمدة.', 'غير متاح', ['response'=>501]);
+        if (!is_user_logged_in()) wp_die('يلزم تسجيل الدخول.', 'غير مصرح', ['response'=>403]);
+        $id = isset($_POST['ngm_product_id']) ? absint($_POST['ngm_product_id']) : 0;
+        if (!$id || !isset($_POST['_ngm_nonce']) || !wp_verify_nonce(sanitize_text_field(wp_unslash($_POST['_ngm_nonce'])), 'ngm_update_product_' . $id)) wp_die('طلب غير صالح. أعد تحميل الصفحة.', 'غير مصرح', ['response'=>403]);
+        if (!$this->ready()) wp_die('WooCommerce غير متاح.', 'خطأ', ['response'=>503]);
+        $post = get_post($id);
+        $admin = current_user_can('manage_woocommerce') || current_user_can('edit_others_products');
+        if (!$post || $post->post_type !== 'product' || (!$admin && (int)$post->post_author !== get_current_user_id())) wp_die('لا تملك صلاحية تعديل هذا المنتج.', 'غير مصرح', ['response'=>403]);
+        $name = isset($_POST['ngm_name']) ? sanitize_text_field(wp_unslash($_POST['ngm_name'])) : '';
+        $description = isset($_POST['ngm_description']) ? sanitize_textarea_field(wp_unslash($_POST['ngm_description'])) : '';
+        $category = isset($_POST['ngm_category']) ? absint($_POST['ngm_category']) : 0;
+        $sku = isset($_POST['ngm_sku']) ? wc_clean(wp_unslash($_POST['ngm_sku'])) : '';
+        $price = isset($_POST['ngm_price']) ? wp_unslash($_POST['ngm_price']) : '';
+        $stock_raw = isset($_POST['ngm_stock']) ? wp_unslash($_POST['ngm_stock']) : '';
+        if (!$name || !$description || !taxonomy_exists('product_cat') || !term_exists($category, 'product_cat') || !is_numeric($price) || (float)$price <= 0) $this->redirect_edit_result($id, 'error');
+        $existing_sku_id = $sku ? wc_get_product_id_by_sku($sku) : 0;
+        if ($existing_sku_id && (int)$existing_sku_id !== $id) $this->redirect_edit_result($id, 'error');
+        $p = wc_get_product($id);
+        if (!$p) $this->redirect_edit_result($id, 'error');
+        if (!empty($_FILES['ngm_image']['name'])) {
+            $file = $_FILES['ngm_image'];
+            if (!isset($file['error']) || (int)$file['error'] !== UPLOAD_ERR_OK || (int)$file['size'] > 2 * 1024 * 1024) $this->redirect_edit_result($id, 'error');
+            $check = wp_check_filetype_and_ext($file['tmp_name'], $file['name']);
+            $image = wp_getimagesize($file['tmp_name']);
+            if (empty($check['type']) || !in_array($check['type'], ['image/jpeg','image/png','image/webp'], true) || !$image || $image[0] < 500 || $image[1] < 500 || $image[0] > 2000 || $image[1] > 2000) $this->redirect_edit_result($id, 'error');
+            require_once ABSPATH . 'wp-admin/includes/file.php';
+            require_once ABSPATH . 'wp-admin/includes/media.php';
+            require_once ABSPATH . 'wp-admin/includes/image.php';
+            $attachment_id = media_handle_upload('ngm_image', 0);
+            if (is_wp_error($attachment_id)) $this->redirect_edit_result($id, 'error');
+            $p->set_image_id($attachment_id);
+        }
+        $p->set_name($name);
+        $p->set_description($description);
+        $p->set_regular_price(wc_format_decimal($price));
+        $p->set_category_ids([$category]);
+        $p->set_manage_stock($stock_raw !== '');
+        if ($stock_raw !== '') {
+            $stock = max(0, absint($stock_raw));
+            $p->set_stock_quantity($stock);
+            $p->set_stock_status($stock > 0 ? 'instock' : 'outofstock');
+        } else {
+            $p->set_stock_quantity(null);
+            $p->set_stock_status('instock');
+        }
+        $p->set_sku($sku);
+        $p->set_status('pending');
+        $p->set_catalog_visibility('hidden');
+        $saved = $p->save();
+        if (!$saved) $this->redirect_edit_result($id, 'error');
+        update_post_meta($id, '_ngm_seller_updated', current_time('mysql'));
+        $this->redirect_edit_result($id, 'yes');
+    }
+    private function redirect_edit_result($id, $result) {
+        $url = wp_get_referer() ?: home_url('/');
+        $url = remove_query_arg(['ngm_edit','ngm_updated','ngm_error'], $url);
+        $args = $result === 'yes' ? ['ngm_updated'=>'yes'] : ['ngm_edit'=>$id, 'ngm_error'=>'1'];
+        wp_safe_redirect(add_query_arg($args, $url));
+        exit;
     }
     public function admin_notice() {
         if (!current_user_can('manage_options') || !is_admin() || !class_exists('WooCommerce')) return;
