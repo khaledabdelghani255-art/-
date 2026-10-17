@@ -160,3 +160,4 @@ final class NEWGEN_Market_Product_Center {
     }
 }
 new NEWGEN_Market_Product_Center();
+
