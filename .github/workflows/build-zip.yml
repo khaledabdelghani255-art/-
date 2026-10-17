@@ -1,0 +1,26 @@
+name: Build installable ZIP
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths:
+      - 'newgen-market-product-center/**'
+      - '.github/workflows/build-zip.yml'
+jobs:
+  package:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@v4
+      - name: Validate PHP syntax
+        run: php -l newgen-market-product-center/newgen-market-product-center.php
+      - name: Package installable plugin
+        run: zip -r newgen-market-product-center.zip newgen-market-product-center
+      - name: Upload ZIP artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: newgen-market-product-center
+          path: newgen-market-product-center.zip
+          if-no-files-found: error
+          retention-days: 30
